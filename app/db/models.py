@@ -14,6 +14,6 @@ class Whisp(Base):
     file_path = Column(String, nullable=True)
     password_hash = Column(String, nullable=True)  # Optional: Server-side password check
     created_at = Column(DateTime, default=datetime.utcnow)
-    expires_at = Column(DateTime, nullable=False)
+    expires_at = Column(DateTime, nullable=False, index=True)
     max_access = Column(Integer, default=1)
     access_count = Column(Integer, default=0)

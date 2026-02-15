@@ -5,7 +5,8 @@ services:
       - "8000:8000"
     volumes:
       - whisp_data:/app/data
-      - whisp_files:/app/app/storage/files
+    tmpfs:
+      - /app/app/storage/files:size=100M,mode=1777
     environment:
       - DATABASE_URL=sqlite+aiosqlite:////app/data/whisp.db
       - DEBUG=false
@@ -13,4 +14,3 @@ services:
 
 volumes:
   whisp_data:
-  whisp_files:

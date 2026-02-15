@@ -1,6 +1,6 @@
-from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File, Form, BackgroundTasks
+from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File, Form, BackgroundTasks, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
@@ -9,13 +9,23 @@ from typing import Optional
 import os
 import uuid
 import aiofiles
+import json
+from cryptography.fernet import Fernet
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 from app.db.session import engine, get_db
 from app.db.models import Base, Whisp
 from app.api import schemas
 from app.core.security import get_password_hash, verify_password
 
+# Rate limiter setup
+limiter = Limiter(key_func=get_remote_address)
+
 app = FastAPI(title="Whisp API")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS configuration
 app.add_middleware(
@@ -52,7 +62,9 @@ def delete_file(path: str):
         os.remove(path)
 
 @app.post("/api/whisps", response_model=schemas.WhispRead)
+@limiter.limit("5/minute")
 async def create_whisp(
+    request: Request,
     background_tasks: BackgroundTasks,
     encrypted_payload: str = Form(...),
     ttl_minutes: int = Form(60),
@@ -72,24 +84,72 @@ async def create_whisp(
         
     whisp_id = str(uuid.uuid4())
     file_path = None
+    final_payload = encrypted_payload
     
     if file:
-        # Validate file size
-        content = await file.read()
-        if len(content) > MAX_FILE_SIZE:
-            raise HTTPException(status_code=413, detail=f"File too large. Max size: {MAX_FILE_SIZE} bytes")
-        
         # Sanitize filename to prevent path traversal
         safe_filename = os.path.basename(file.filename or "unnamed")
-        file_path = os.path.join(STORAGE_DIR, f"{whisp_id}_{safe_filename}")
+        file_path = os.path.join(STORAGE_DIR, f"{whisp_id}_{safe_filename}.enc")
         
-        # Use aiofiles for async file write
-        async with aiofiles.open(file_path, "wb") as buffer:
-            await buffer.write(content)
+        # Generate encryption key for this file (Encryption at Rest)
+        key = Fernet.generate_key()
+        f = Fernet(key)
+        
+        # Store metadata + key in encrypted_payload field
+        # The client sent the filename as 'encrypted_payload', we wrap it
+        metadata = {
+            "filename": encrypted_payload, # Client sent filename here
+            "key": key.decode('utf-8')
+        }
+        final_payload = json.dumps(metadata)
+        
+        # Stream file write with encryption
+        total_size = 0
+        CHUNK_SIZE = 1024 * 1024  # 1MB chunks
+        
+        try:
+            async with aiofiles.open(file_path, "wb") as buffer:
+                while True:
+                    chunk = await file.read(CHUNK_SIZE)
+                    if not chunk:
+                        break
+                    total_size += len(chunk)
+                    if total_size > MAX_FILE_SIZE:
+                        # Clean up partial file immediately
+                        await buffer.close()
+                        os.remove(file_path)
+                        raise HTTPException(status_code=413, detail=f"File too large. Max size: {MAX_FILE_SIZE} bytes")
+                    
+                    # Encrypt chunk
+                    # Note: Fernet is not stream-friendly by default (adds padding/integrity). 
+                    # For strict streaming we'd use AES-GCM directly or encrypt small blocks.
+                    # Given 10MB limit, encrypting chunks individually is messy. 
+                    # Better: Read full into memory (10MB is acceptable) -> Encrypt -> Write.
+                    # Or use a stream cipher. Fernet wraps AES-CBC+HMAC.
+                    # Let's pivot: Since we have 10MB limit, loading 10MB into RAM to encrypt safely is OK.
+                    pass
+            
+            # Re-implementing with full read for safety with Fernet (10MB limit makes this safe)
+            await file.seek(0)
+            content = await file.read() 
+            if len(content) > MAX_FILE_SIZE:
+                 raise HTTPException(status_code=413, detail=f"File too large. Max size: {MAX_FILE_SIZE} bytes")
+            
+            encrypted_content = f.encrypt(content)
+            async with aiofiles.open(file_path, "wb") as buffer:
+                await buffer.write(encrypted_content)
+                
+        except Exception as e:
+            # Ensure cleanup on any error if file was created
+            if os.path.exists(file_path):
+                os.remove(file_path)
+            if isinstance(e, HTTPException):
+                raise e
+            raise HTTPException(status_code=500, detail="File upload failed")
             
     new_whisp = Whisp(
         id=whisp_id,
-        encrypted_payload=encrypted_payload,
+        encrypted_payload=final_payload,
         is_file=bool(file),
         file_path=file_path,
         password_hash=password_hash,
@@ -106,7 +166,9 @@ async def create_whisp(
     return new_whisp
 
 @app.get("/api/whisps/{whisp_id}")
+@limiter.limit("10/minute")
 async def get_whisp(
+    request: Request,
     whisp_id: str,
     password: Optional[str] = None,
     db: AsyncSession = Depends(get_db)
@@ -135,7 +197,9 @@ async def get_whisp(
     return data
 
 @app.get("/api/whisps/{whisp_id}/file")
+@limiter.limit("10/minute")
 async def get_whisp_file(
+    request: Request,
     whisp_id: str,
     background_tasks: BackgroundTasks,
     password: Optional[str] = None,
@@ -160,6 +224,28 @@ async def get_whisp_file(
             
     file_path = whisp.file_path
     
+    # Retrieve encryption key and filename from payload
+    try:
+        metadata = json.loads(whisp.encrypted_payload)
+        encryption_key = metadata.get("key")
+        filename = metadata.get("filename")
+    except:
+        # Fallback for old unencrypted files (if any)
+        encryption_key = None
+        filename = "downloaded_file"
+
+    content = None
+    if encryption_key:
+        # Decrypt file
+        f = Fernet(encryption_key.encode('utf-8'))
+        async with aiofiles.open(file_path, "rb") as buffer:
+            encrypted_content = await buffer.read()
+            content = f.decrypt(encrypted_content)
+    else:
+        # Serve plaintext (legacy or error)
+        async with aiofiles.open(file_path, "rb") as buffer:
+            content = await buffer.read()
+
     # Delete from DB immediately (one-time access)
     await db.delete(whisp)
     await db.commit()
@@ -167,4 +253,9 @@ async def get_whisp_file(
     # Delete file from disk after sending
     background_tasks.add_task(delete_file, file_path)
     
-    return FileResponse(file_path)
+    # Serve decrypted content
+    return Response(
+        content=content, 
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )

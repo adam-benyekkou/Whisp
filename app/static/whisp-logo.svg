@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <defs>
+    <radialGradient id="orb-gradient" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="1" />
+      <stop offset="40%" stop-color="#d8b4fe" stop-opacity="0.8" />
+      <stop offset="100%" stop-color="#7c3aed" stop-opacity="0.6" />
+    </radialGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Left Wing -->
+  <ellipse cx="30" cy="40" rx="25" ry="12" fill="#c4b5fd" fill-opacity="0.4" transform="rotate(45 30 40)">
+    <animate attributeName="ry" values="12;15;12" dur="0.2s" repeatCount="indefinite" />
+    <animate attributeName="rx" values="25;28;25" dur="0.2s" repeatCount="indefinite" />
+  </ellipse>
+  
+  <!-- Right Wing -->
+  <ellipse cx="70" cy="40" rx="25" ry="12" fill="#c4b5fd" fill-opacity="0.4" transform="rotate(-45 70 40)">
+    <animate attributeName="ry" values="12;15;12" dur="0.2s" repeatCount="indefinite" />
+    <animate attributeName="rx" values="25;28;25" dur="0.2s" repeatCount="indefinite" />
+  </ellipse>
+
+  <!-- Orb -->
+  <circle cx="50" cy="50" r="22" fill="url(#orb-gradient)" filter="url(#glow)">
+    <animate attributeName="r" values="22;25;22" dur="3s" repeatCount="indefinite" />
+  </circle>
+</svg>

@@ -6,5 +6,6 @@ python-multipart==0.0.22
 python-dotenv==1.2.1
 cryptography==46.0.5
 aiosqlite==0.22.1
-passlib[bcrypt]==1.7.4
+bcrypt==4.2.1
 aiofiles==23.2.1
+slowapi==0.1.9
