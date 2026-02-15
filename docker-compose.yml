@@ -1,0 +1,17 @@
+services:
+  whisp:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - whisp_data:/app/whisp.db
+      - whisp_files:/app/app/storage/files
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:///./whisp.db
+      - DEBUG=false
+    restart: unless-stopped
+    user: "1000:1000"
+
+volumes:
+  whisp_data:
+  whisp_files:

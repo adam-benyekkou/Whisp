@@ -1,0 +1,10 @@
+fastapi==0.129.0
+uvicorn==0.40.0
+sqlalchemy==2.0.46
+pydantic==2.12.5
+python-multipart==0.0.22
+python-dotenv==1.2.1
+cryptography==46.0.5
+aiosqlite==0.22.1
+passlib[bcrypt]==1.7.4
+aiofiles==23.2.1

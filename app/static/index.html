@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Whisp 🤫 - Share Secrets Securely</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #f8fafc; }
+        .glass { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        .gradient-text { background: linear-gradient(to right, #60a5fa, #a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+    <div id="app" class="w-full max-w-md glass p-8 rounded-2xl shadow-2xl">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <h1 class="text-4xl font-semibold gradient-text mb-2">Whisp</h1>
+            <p class="text-slate-400 text-sm">Ephemeral, zero-knowledge secret sharing.</p>
+        </div>
+
+        <!-- Create View -->
+        <div id="create-view">
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-1 text-slate-300">Secret Message</label>
+                <textarea id="secret-text" rows="4" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all" placeholder="Paste your secret string here..."></textarea>
+            </div>
+
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-1 text-slate-300">Or Upload File</label>
+                <input type="file" id="secret-file" class="w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-500 file:text-white hover:file:bg-blue-600 transition-all cursor-pointer">
+            </div>
+
+            <div class="grid grid-cols-2 gap-4 mb-6">
+                <div>
+                    <label class="block text-sm font-medium mb-1 text-slate-300">Password (Optional)</label>
+                    <input type="password" id="password" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Extra security">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1 text-slate-300">Expiry</label>
+                    <select id="ttl" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                        <option value="10">10 Minutes</option>
+                        <option value="60" selected>1 Hour</option>
+                        <option value="1440">1 Day</option>
+                        <option value="10080">1 Week</option>
+                    </select>
+                </div>
+            </div>
+
+            <button id="create-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition-all transform active:scale-95">
+                Create Secure Whisp
+            </button>
+        </div>
+
+        <!-- Result View -->
+        <div id="result-view" class="hidden">
+            <div class="bg-green-500/10 border border-green-500/20 p-4 rounded-lg mb-6">
+                <p class="text-green-400 text-sm font-medium">Whisp created successfully!</p>
+            </div>
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-1 text-slate-300">Share this link</label>
+                <div class="flex gap-2">
+                    <input type="text" id="whisp-link" readonly class="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none">
+                    <button id="copy-btn" class="bg-slate-700 hover:bg-slate-600 px-4 rounded-lg transition-all">📋</button>
+                </div>
+            </div>
+            <p class="text-xs text-slate-500 text-center">This link will expire and delete itself after one access.</p>
+            <button onclick="location.reload()" class="w-full mt-6 text-slate-400 hover:text-white text-sm">Create another</button>
+        </div>
+
+        <!-- Access View -->
+        <div id="access-view" class="hidden">
+            <p class="text-center text-slate-300 mb-6">Someone shared a secret whisp with you.</p>
+            
+            <div id="pwd-required" class="hidden mb-4">
+                <label class="block text-sm font-medium mb-1 text-slate-300">Enter Password</label>
+                <input type="password" id="access-password" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Password required to decrypt">
+            </div>
+
+            <button id="reveal-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition-all transform active:scale-95">
+                Reveal Secret
+            </button>
+
+            <div id="secret-display" class="hidden mt-8">
+                <label class="block text-sm font-medium mb-2 text-slate-300">Decrypted Content</label>
+                <div id="decrypted-text" class="bg-slate-900 border border-slate-700 rounded-lg p-4 text-sm whitespace-pre-wrap break-all"></div>
+                <div id="file-download" class="hidden mt-4">
+                    <a id="download-link" href="#" class="inline-flex items-center gap-2 text-blue-400 hover:text-blue-300 font-medium">
+                        <span>📥</span> Download File
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div id="error-view" class="hidden">
+            <div class="bg-red-500/10 border border-red-500/20 p-4 rounded-lg mb-6 text-center">
+                <p id="error-msg" class="text-red-400 text-sm font-medium">Whisp not found or already deleted.</p>
+            </div>
+            <button onclick="location.href='/'" class="w-full text-slate-400 hover:text-white text-sm">Go home</button>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
