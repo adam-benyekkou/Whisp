@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div x-data="revealWhisp()">
+    
+    <!-- Loading State -->
+    <div x-show="loading" class="text-center py-10" x-transition>
+        <div class="animate-spin text-4xl mb-4">🔮</div>
+        <p class="text-subtext0 animate-pulse">Summoning Whisp...</p>
+    </div>
+
+    <!-- Password Prompt -->
+    <div x-show="passwordRequired && !loading" x-cloak class="text-center" x-transition id="access-view">
+        <div class="mb-6">
+            <div class="w-16 h-16 bg-mauve/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-mauve/20">
+                <svg class="w-8 h-8 text-mauve" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+            </div>
+            <h2 class="text-xl font-bold text-text mb-2">Encrypted Whisp Detected</h2>
+            <p class="text-overlay1 text-sm">This secret is protected by an additional passphrase.</p>
+        </div>
+
+        <form @submit.prevent="fetchWhisp" id="pwd-required">
+            <input type="password" x-model="password" id="access-password" class="w-full bg-base border border-overlay1/20 rounded p-3 text-text focus:outline-none focus:border-mauve transition-colors mb-4 text-center placeholder-overlay1/50" placeholder="Enter Passphrase" required>
+            <button type="submit" id="unlock-btn" class="w-full bg-mauve text-base font-bold py-3 rounded-lg hover:bg-mauve/90 transition-all">Unlock Secret</button>
+        </form>
+    </div>
+
+    <!-- Content Display -->
+    <div x-show="(content || type === 'file') && !loading" x-cloak x-transition id="secret-display">
+        <div class="bg-red/10 border border-red/20 text-red px-4 py-2 rounded mb-6 text-sm text-center flex items-center justify-center gap-2">
+            <span class="animate-pulse">🔥</span> 
+            <span>Whisp incinerated from server.</span>
+        </div>
+
+        <!-- Text Content -->
+        <template x-if="type === 'text'">
+            <div>
+                <label class="block text-sm font-bold mb-2 text-subtext0">Decrypted Message</label>
+                <div class="relative group cursor-pointer" @click="revealed = !revealed" id="reveal-btn">
+                    <div class="absolute inset-0 bg-mauve/5 rounded-lg -z-10 group-hover:bg-mauve/10 transition-colors"></div>
+                    <div id="decrypted-text" x-text="content" 
+                         class="p-6 rounded-lg border border-overlay1/20 min-h-[100px] break-words font-mono text-sm leading-relaxed transition-all duration-500 ease-in-out select-text"
+                         :class="{ 'blur-md select-none opacity-50': !revealed, 'blur-0 opacity-100': revealed }">
+                    </div>
+                    
+                    <!-- Blur Overlay Text -->
+                    <div x-show="!revealed" class="absolute inset-0 flex items-center justify-center text-mauve font-bold z-10 pointer-events-none">
+                        <span>Click to Reveal</span>
+                    </div>
+                </div>
+                
+                <div class="mt-4 flex justify-between items-center">
+                    <button @click="copyContent" class="text-blue text-sm hover:underline flex items-center gap-1">
+                        📋 Copy to Clipboard
+                    </button>
+                    <div class="text-xs text-overlay1" x-data="{ time: 300, timer: null }" x-init="timer = setInterval(() => { time--; if(time <= 0) { clearInterval(timer); window.location.href='/'; } }, 1000)">
+                        Closing in <span x-text="Math.floor(time / 60) + ':' + (time % 60).toString().padStart(2, '0')" class="font-mono text-red"></span>
+                    </div>
+                </div>
+            </div>
+        </template>
+
+        <!-- File Content -->
+        <template x-if="type === 'file'">
+            <div class="text-center py-8">
+                <div class="text-6xl mb-4">📦</div>
+                <h3 class="text-xl font-bold text-text mb-2" x-text="filename"></h3>
+                <p class="text-subtext0 mb-6">Ready for secure download.</p>
+                
+                <a :href="downloadUrl" :download="filename" class="inline-flex items-center gap-2 bg-blue text-base font-bold py-3 px-8 rounded-lg hover:bg-blue/90 transition-all mx-auto">
+                    <span>Download Artifact</span>
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                </a>
+            </div>
+        </template>
+
+        <div class="mt-8 pt-6 border-t border-overlay1/10 text-center">
+             <button @click="window.location.href='/'" class="text-subtext0 hover:text-mauve text-sm transition-colors">Create New Whisp</button>
+        </div>
+    </div>
+
+    <!-- Error State -->
+    <div x-show="error" x-cloak class="text-center" x-transition id="error-view">
+        <div class="bg-red/10 border border-red/50 text-red px-4 py-4 rounded mb-6">
+            <p x-text="error" class="font-bold" id="error-msg"></p>
+        </div>
+        <button @click="window.location.href='/'" class="bg-mantle border border-overlay1/20 px-6 py-2 rounded hover:bg-overlay1/10 text-text transition-colors">Return to Vault</button>
+    </div>
+
+</div>
+
+<script>
+    /**
+     * Alpine.js component for revealing/decrypting a Whisp.
+     */
+    function revealWhisp() {
+        return {
+            loading: true,
+            passwordRequired: false,
+            password: '',
+            content: null,
+            type: null, // 'text' or 'file'
+            filename: '',
+            downloadUrl: '',
+            error: null,
+            revealed: false,
+            id: '',
+            key: '',
+
+            /**
+             * Initialization: Parse URL fragment for ID and Key.
+             */
+            async init() {
+                const hash = window.location.hash.substring(1);
+                if (!hash) {
+                    this.error = "Invalid Link";
+                    this.loading = false;
+                    return;
+                }
+
+                // URL format: #id (file) or #id:key (text)
+                if (hash.includes(':')) {
+                    const parts = hash.split(':');
+                    this.id = parts[0];
+                    this.key = parts[1];
+                } else {
+                    this.id = hash;
+                }
+
+                await this.fetchWhisp();
+            },
+
+            /**
+             * Retrieves the encrypted whisp from the API and performs decryption.
+             */
+            async fetchWhisp() {
+                this.loading = true;
+                this.error = null;
+                
+                try {
+                    const url = `/api/whisps/${this.id}` + (this.password ? `?password=${encodeURIComponent(this.password)}` : '');
+                    const res = await fetch(url);
+
+                    // Handle server-side password protection (401 Unauthorized)
+                    if (res.status === 401) {
+                        this.passwordRequired = true;
+                        if (this.password) this.$dispatch('notify', { message: 'Incorrect Password', type: 'error' });
+                        this.loading = false;
+                        return;
+                    }
+
+                    if (!res.ok) {
+                        if (res.status === 404) throw new Error("Whisp not found or expired.");
+                        throw new Error("Failed to retrieve whisp.");
+                    }
+
+                    const data = await res.json();
+                    
+                    if (data.is_file) {
+                        // FILE MODE: Direct download of the decrypted-at-rest file.
+                        this.type = 'file';
+                        try {
+                            const metadata = JSON.parse(data.encrypted_payload);
+                            this.filename = metadata.filename || 'downloaded_file';
+                        } catch(e) {
+                            this.filename = data.encrypted_payload || 'downloaded_file';
+                        }
+                        this.downloadUrl = `/api/whisps/${this.id}/file` + (this.password ? `?password=${encodeURIComponent(this.password)}` : '');
+                    } else {
+                        // TEXT MODE: Perform client-side decryption.
+                        this.type = 'text';
+                        if (!this.key) throw new Error("Missing encryption key.");
+                        
+                        try {
+                            // 1. Parse encrypted components (ciphertext, iv, salt).
+                            const payload = JSON.parse(data.encrypted_payload);
+                            const { cipherText, iv, salt } = payload;
+                            
+                            // 2. Decrypt using the key from the URL fragment.
+                            this.content = await window.WhispCrypto.decryptPayload(cipherText, this.key, iv, salt);
+                        } catch (e) {
+                            console.error(e);
+                            throw new Error("Decryption Failed. Data may be corrupted.");
+                        }
+                    }
+
+                    this.loading = false;
+                    this.passwordRequired = false;
+
+                } catch (e) {
+                    this.error = e.message;
+                    this.loading = false;
+                }
+            },
+
+            /**
+             * Copies the decrypted secret to the clipboard.
+             */
+            copyContent() {
+                navigator.clipboard.writeText(this.content);
+                this.$dispatch('notify', { message: 'Secret copied!', type: 'success' });
+            }
+        }
+    }
+</script>
+{% endblock %}

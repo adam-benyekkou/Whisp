@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Whisp</title>
+    <link rel="icon" type="image/svg+xml" href="/static/whisp-logo.svg">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        base: '#1e1e2e',
+                        mantle: '#181825',
+                        crust: '#11111b',
+                        text: '#cdd6f4',
+                        subtext0: '#a6adc8',
+                        overlay1: '#7f849c',
+                        mauve: '#cba6f7',
+                        red: '#f38ba8',
+                        green: '#a6e3a1',
+                        blue: '#89b4fa',
+                        lavender: '#b4befe',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-base: #1e1e2e;
+            --color-mauve: #cba6f7;
+        }
+        body {
+            background-color: var(--bg-base);
+            color: #cdd6f4;
+        }
+        /* Zelda Wisp Orb Animation */
+        .wisp-orb {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, #cba6f7, #89b4fa, #1e1e2e);
+            box-shadow: 0 0 20px #cba6f7, 0 0 40px #89b4fa;
+            animation: float 3s ease-in-out infinite, pulse 2s ease-in-out infinite alternate;
+        }
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 20px #cba6f7, 0 0 40px #89b4fa; }
+            100% { box-shadow: 0 0 30px #cba6f7, 0 0 60px #89b4fa; }
+        }
+        [x-cloak] { display: none !important; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center p-4 selection:bg-mauve selection:text-base">
+
+    <!-- Toast Notification -->
+    <div x-data="{ show: false, message: '', type: 'info' }"
+         @notify.window="show = true; message = $event.detail.message; type = $event.detail.type || 'info'; setTimeout(() => show = false, 3000)"
+         x-show="show"
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0 translate-y-2"
+         x-transition:enter-end="opacity-100 translate-y-0"
+         x-transition:leave="transition ease-in duration-200"
+         x-transition:leave-start="opacity-100 translate-y-0"
+         x-transition:leave-end="opacity-0 translate-y-2"
+         class="fixed top-4 right-4 z-50 px-4 py-3 rounded shadow-lg text-white font-medium flex items-center gap-2"
+         :class="{ 'bg-green/90': type === 'success', 'bg-red/90': type === 'error', 'bg-blue/90': type === 'info' }"
+         x-cloak>
+        <span x-text="message"></span>
+    </div>
+
+    <!-- Header -->
+    <header class="text-center mb-8">
+        <div class="flex justify-center items-center mb-2">
+            <div class="wisp-orb mr-4"></div>
+            <h1 class="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-mauve to-blue">Whisp</h1>
+        </div>
+        <p class="text-subtext0 text-sm">Ephemeral, zero-knowledge secret sharing.</p>
+        <div class="inline-flex items-center gap-2 mt-2 px-3 py-1 rounded-full bg-mantle border border-overlay1/20 text-xs text-green">
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+            End-to-End Encrypted
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="w-full max-w-lg bg-mantle/50 backdrop-blur border border-overlay1/20 rounded-xl p-6 shadow-2xl relative overflow-hidden">
+        <!-- Glow effect -->
+        <div class="absolute -top-20 -left-20 w-40 h-40 bg-mauve/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div class="absolute -bottom-20 -right-20 w-40 h-40 bg-blue/10 rounded-full blur-3xl pointer-events-none"></div>
+        
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="mt-8 text-center text-overlay1 text-xs">
+        <p>&copy; 2026 Whisp. Self-Hosted & Secure.</p>
+    </footer>
+
+    <!-- Global Scripts -->
+    <script src="/static/js/crypto.js"></script>
+</body>
+</html>

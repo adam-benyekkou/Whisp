@@ -1,6 +1,11 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Whisp E2E Tests', () => {
+
+  test.beforeEach(async ({ page }) => {
+    page.on('console', msg => console.log('BROWSER CONSOLE:', msg.text()));
+    page.on('pageerror', err => console.log('BROWSER ERROR:', err.message));
+  });
   
   test('should create and retrieve a text whisp', async ({ page, context }) => {
     // Navigate to home page
@@ -8,8 +13,11 @@ test.describe('Whisp E2E Tests', () => {
     
     // Create a whisp
     const secretMessage = 'This is a super secret test message!';
-    await page.fill('#secret-text', secretMessage);
+    await page.locator('#secret-text').fill(secretMessage);
     await page.selectOption('#ttl', '10'); // 10 minutes
+    
+    // Wait for Alpine to enable the button
+    await expect(page.locator('#create-btn')).toBeEnabled();
     await page.click('#create-btn');
     
     // Wait for result view
@@ -17,7 +25,7 @@ test.describe('Whisp E2E Tests', () => {
     
     // Get the whisp link
     const whispLink = await page.locator('#whisp-link').inputValue();
-    expect(whispLink).toContain('http://localhost:8000/#');
+    expect(whispLink).toContain('http://localhost:8000/reveal#');
     expect(whispLink).toContain(':'); // Should have id:key format
     
     // Extract the fragment (id:key)
@@ -32,19 +40,18 @@ test.describe('Whisp E2E Tests', () => {
     const newPage = await context.newPage();
     await newPage.goto(whispLink);
     
-    // Should show access view
-    await expect(newPage.locator('#access-view')).toBeVisible();
+    // Should NOT show create view
     await expect(newPage.locator('#create-view')).not.toBeVisible();
     
-    // Click reveal button
-    await newPage.click('#reveal-btn');
-    
-    // Wait for decryption
+    // Wait for decryption (it happens automatically in init)
     await expect(newPage.locator('#secret-display')).toBeVisible({ timeout: 5000 });
     
+    // Click unblur
+    await newPage.click('#reveal-btn');
+    
     // Verify decrypted content
-    const decryptedText = await newPage.locator('#decrypted-text').textContent();
-    expect(decryptedText).toBe(secretMessage);
+    const decryptedText = await newPage.locator('#decrypted-text').innerText();
+    expect(decryptedText.trim()).toBe(secretMessage);
     
     console.log('Successfully decrypted:', decryptedText);
     
@@ -58,9 +65,11 @@ test.describe('Whisp E2E Tests', () => {
     const password = 'mySecurePassword123';
     
     // Create whisp with password
-    await page.fill('#secret-text', secretMessage);
-    await page.fill('#password', password);
+    await page.locator('#secret-text').fill(secretMessage);
+    await page.locator('#password').fill(password);
     await page.selectOption('#ttl', '60');
+    
+    await expect(page.locator('#create-btn')).toBeEnabled();
     await page.click('#create-btn');
     
     await expect(page.locator('#result-view')).toBeVisible({ timeout: 5000 });
@@ -78,21 +87,20 @@ test.describe('Whisp E2E Tests', () => {
     
     // Try wrong password first
     await newPage.fill('#access-password', 'wrongPassword');
-    await newPage.click('#reveal-btn');
+    await newPage.click('#unlock-btn');
     
-    // Should show error
-    await expect(newPage.locator('#error-view')).toBeVisible({ timeout: 3000 });
-    
-    // Go back and try correct password
-    await newPage.goto(whispLink);
+    // Should stay on access view (or show error toast)
     await expect(newPage.locator('#access-view')).toBeVisible();
+    
+    // Try correct password
     await newPage.fill('#access-password', password);
-    await newPage.click('#reveal-btn');
+    await newPage.click('#unlock-btn');
     
     // Should decrypt successfully
     await expect(newPage.locator('#secret-display')).toBeVisible({ timeout: 5000 });
-    const decryptedText = await newPage.locator('#decrypted-text').textContent();
-    expect(decryptedText).toBe(secretMessage);
+    await newPage.click('#reveal-btn'); // Unblur
+    const decryptedText = await newPage.locator('#decrypted-text').innerText();
+    expect(decryptedText.trim()).toBe(secretMessage);
     
     console.log('Password-protected whisp decrypted successfully');
     
@@ -105,7 +113,8 @@ test.describe('Whisp E2E Tests', () => {
     const secretMessage = 'This should only be readable once!';
     
     // Create whisp
-    await page.fill('#secret-text', secretMessage);
+    await page.locator('#secret-text').fill(secretMessage);
+    await expect(page.locator('#create-btn')).toBeEnabled();
     await page.click('#create-btn');
     
     await expect(page.locator('#result-view')).toBeVisible({ timeout: 5000 });
@@ -116,10 +125,10 @@ test.describe('Whisp E2E Tests', () => {
     // First access - should work
     const firstPage = await context.newPage();
     await firstPage.goto(whispLink);
-    await firstPage.click('#reveal-btn');
     await expect(firstPage.locator('#secret-display')).toBeVisible({ timeout: 5000 });
-    const firstDecrypt = await firstPage.locator('#decrypted-text').textContent();
-    expect(firstDecrypt).toBe(secretMessage);
+    await firstPage.click('#reveal-btn'); // Unblur
+    const firstDecrypt = await firstPage.locator('#decrypted-text').innerText();
+    expect(firstDecrypt.trim()).toBe(secretMessage);
     
     console.log('First access succeeded');
     await firstPage.close();
@@ -128,16 +137,10 @@ test.describe('Whisp E2E Tests', () => {
     const secondPage = await context.newPage();
     await secondPage.goto(whispLink);
     
-    // Wait a moment for the page to load
-    await secondPage.waitForTimeout(1000);
-    
-    // Should show error view or access view, but clicking reveal should fail
-    await secondPage.click('#reveal-btn');
-    
-    // Should show error
+    // Should show error view
     await expect(secondPage.locator('#error-view')).toBeVisible({ timeout: 5000 });
     const errorMsg = await secondPage.locator('#error-msg').textContent();
-    expect(errorMsg).toContain('not found');
+    expect(errorMsg.toLowerCase()).toContain('not found');
     
     console.log('Second access correctly denied:', errorMsg);
     
@@ -150,8 +153,9 @@ test.describe('Whisp E2E Tests', () => {
     const secretMessage = 'This will expire soon';
     
     // Create whisp with very short TTL (1 minute for practical testing)
-    await page.fill('#secret-text', secretMessage);
+    await page.locator('#secret-text').fill(secretMessage);
     await page.selectOption('#ttl', '10'); // 10 minutes (shortest we can test practically)
+    await expect(page.locator('#create-btn')).toBeEnabled();
     await page.click('#create-btn');
     
     await expect(page.locator('#result-view')).toBeVisible({ timeout: 5000 });
@@ -160,7 +164,7 @@ test.describe('Whisp E2E Tests', () => {
     // Verify whisp is created and accessible immediately
     const newPage = await context.newPage();
     await newPage.goto(whispLink);
-    await expect(newPage.locator('#access-view')).toBeVisible();
+    await expect(newPage.locator('#secret-display')).toBeVisible();
     
     console.log('Whisp created with 10min expiry - verified accessible');
     
@@ -195,14 +199,10 @@ test.describe('Whisp E2E Tests', () => {
     // Check main elements are visible
     await expect(page.locator('h1')).toContainText('Whisp');
     await expect(page.locator('#secret-text')).toBeVisible();
-    await expect(page.locator('#secret-file')).toBeVisible();
+    await expect(page.locator('#file-upload-zone')).toBeVisible();
     await expect(page.locator('#password')).toBeVisible();
     await expect(page.locator('#ttl')).toBeVisible();
     await expect(page.locator('#create-btn')).toBeVisible();
-    
-    // Verify glassmorphism styling is applied
-    const appDiv = page.locator('#app');
-    await expect(appDiv).toHaveClass(/glass/);
     
     console.log('UI rendered correctly');
   });
@@ -211,7 +211,8 @@ test.describe('Whisp E2E Tests', () => {
     await page.goto('/');
     
     // Create a whisp
-    await page.fill('#secret-text', 'Test for clipboard');
+    await page.locator('#secret-text').fill('Test for clipboard');
+    await expect(page.locator('#create-btn')).toBeEnabled();
     await page.click('#create-btn');
     
     await expect(page.locator('#result-view')).toBeVisible({ timeout: 5000 });

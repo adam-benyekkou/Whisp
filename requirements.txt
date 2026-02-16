@@ -9,3 +9,7 @@ aiosqlite==0.22.1
 bcrypt==4.2.1
 aiofiles==23.2.1
 slowapi==0.1.9
+jinja2
+pytest
+pytest-asyncio
+httpx

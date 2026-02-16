@@ -1,0 +1,249 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div x-data="createWhisp()" x-init="checkHash()">
+    <!-- Create Form -->
+    <div x-show="!result" x-transition>
+        <form @submit.prevent="submit">
+            <!-- Secret Text -->
+            <div class="mb-4">
+                <label class="block text-sm font-bold mb-2 text-subtext0">Secret Message</label>
+                <textarea x-model="secret" id="secret-text"
+                          class="w-full bg-base border border-overlay1/20 rounded p-3 text-text focus:outline-none focus:border-mauve transition-colors resize-y h-32 placeholder-overlay1/50"
+                          placeholder="Your confidential message..."
+                          :disabled="file"
+                ></textarea>
+                <div class="text-right text-xs text-overlay1 mt-1" x-text="secret.length.toLocaleString() + ' / 10,000'"></div>
+            </div>
+
+            <!-- Drag & Drop File -->
+            <div class="mb-6">
+                <label class="block text-sm font-bold mb-2 text-subtext0">Or Upload Artifact</label>
+                <div class="border-2 border-dashed border-overlay1/20 rounded-lg p-6 text-center transition-all relative group"
+                     :class="{ 'border-mauve bg-mauve/5': dragging, 'bg-base hover:border-overlay1/40': !dragging }"
+                     @dragover.prevent="dragging = true"
+                     @dragleave.prevent="dragging = false"
+                     @drop.prevent="handleDrop($event)"
+                     id="file-upload-zone"
+                >
+                    <input type="file" x-ref="fileInput" class="hidden" @change="handleFileSelect($event)" id="secret-file">
+                    
+                    <template x-if="!file">
+                        <div class="cursor-pointer" @click="$refs.fileInput.click()">
+                            <div class="text-4xl mb-2 opacity-80 group-hover:scale-110 transition-transform">📄</div>
+                            <p class="text-sm text-subtext0">Drag & Drop or <span class="text-mauve font-semibold hover:underline">Browse</span></p>
+                            <p class="text-xs text-overlay1 mt-1">Max 10MB</p>
+                        </div>
+                    </template>
+
+                    <template x-if="file">
+                        <div class="flex items-center justify-between bg-mantle p-3 rounded border border-overlay1/10">
+                            <div class="flex items-center gap-3 overflow-hidden">
+                                <span class="text-2xl">📎</span>
+                                <div class="text-left min-w-0">
+                                    <p class="text-sm font-bold truncate text-text" x-text="file.name"></p>
+                                    <p class="text-xs text-overlay1" x-text="formatSize(file.size)"></p>
+                                </div>
+                            </div>
+                            <button type="button" @click="file = null; dragging = false" class="text-red hover:text-red/80 p-1 rounded hover:bg-red/10 transition-colors">✕</button>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Settings -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div>
+                    <label class="block text-sm font-bold mb-2 text-subtext0">Passphrase (Optional)</label>
+                    <input type="password" x-model="password" id="password" class="w-full bg-base border border-overlay1/20 rounded p-2 text-text focus:outline-none focus:border-mauve transition-colors placeholder-overlay1/50" placeholder="Extra security layer">
+                </div>
+                <div>
+                    <label class="block text-sm font-bold mb-2 text-subtext0">Self-Destruct Timer</label>
+                    <select x-model="ttl" id="ttl" class="w-full bg-base border border-overlay1/20 rounded p-2 text-text focus:outline-none focus:border-mauve transition-colors cursor-pointer">
+                        <option value="10">10 Minutes</option>
+                        <option value="60">1 Hour</option>
+                        <option value="1440">1 Day</option>
+                        <option value="10080">1 Week</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Submit -->
+            <button type="submit" id="create-btn"
+                    class="w-full bg-mauve text-base font-bold py-3 rounded-lg hover:bg-mauve/90 hover:shadow-lg hover:shadow-mauve/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2 text-crust"
+                    :disabled="isSubmitting || (!secret && !file)">
+                <span x-show="isSubmitting" class="animate-spin">⏳</span>
+                <span x-text="isSubmitting ? 'Encrypting...' : 'Create Secure Whisp'"></span>
+            </button>
+        </form>
+    </div>
+
+    <!-- Result View -->
+    <div x-show="result" x-cloak class="text-center" x-transition id="result-view">
+        <div class="bg-green/10 border border-green/50 text-green px-4 py-3 rounded mb-6 font-medium">
+            ✨ Whisp generated successfully!
+        </div>
+        
+        <div class="mb-6 text-left">
+            <label class="block text-sm font-bold mb-2 text-subtext0">Secure Link</label>
+            <div class="flex gap-2">
+                <input type="text" id="whisp-link" :value="resultLink" readonly class="w-full bg-mantle border border-overlay1/20 rounded p-2 text-text font-mono text-sm focus:outline-none focus:border-blue selection:bg-blue selection:text-base" @click="$event.target.select()">
+                <button id="copy-btn" @click="copyLink($event)" class="bg-mantle border border-overlay1/20 px-3 rounded hover:bg-blue/10 hover:border-blue/50 hover:text-blue transition-colors" title="Copy">
+                    📋
+                </button>
+            </div>
+        </div>
+
+        <p class="text-xs text-overlay1 mb-6">This link will self-destruct after one access.</p>
+        
+        <button @click="reset" class="text-mauve text-sm hover:underline font-medium">Generate New Whisp</button>
+    </div>
+</div>
+
+<script>
+    /**
+     * Alpine.js component for creating a new Whisp.
+     */
+    function createWhisp() {
+        return {
+            secret: '',
+            file: null,
+            password: '',
+            ttl: '60',
+            dragging: false,
+            isSubmitting: false,
+            result: false,
+            resultLink: '',
+
+            /**
+             * Check if the current URL has a hash (legacy link format).
+             * Redirects to the reveal page if a potential whisp ID is detected.
+             */
+            checkHash() {
+                if(window.location.hash.length > 30) {
+                    window.location.href = '/reveal' + window.location.hash;
+                }
+            },
+
+            /**
+             * Handle file drop events in the upload zone.
+             */
+            handleDrop(e) {
+                this.dragging = false;
+                const files = e.dataTransfer.files;
+                if (files.length) this.handleFileSelect({ target: { files } });
+            },
+
+            /**
+             * Process the selected file and validate its size.
+             */
+            handleFileSelect(e) {
+                const file = e.target.files[0];
+                if (file) {
+                    if (file.size > 10 * 1024 * 1024) {
+                        this.$dispatch('notify', { message: 'File too large (Max 10MB)', type: 'error' });
+                        return;
+                    }
+                    this.file = file;
+                    this.secret = ''; // Mutually exclusive: clearing text if file is uploaded
+                }
+            },
+
+            /**
+             * Formats file size in human-readable units.
+             */
+            formatSize(bytes) {
+                if (bytes === 0) return '0 B';
+                const k = 1024;
+                const sizes = ['B', 'KB', 'MB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+            },
+
+            /**
+             * Submits the whisp to the server.
+             * For text whisps, performs client-side encryption before transmission.
+             */
+            async submit() {
+                this.isSubmitting = true;
+                try {
+                    const formData = new FormData();
+                    formData.append('ttl_minutes', this.ttl);
+                    if (this.password) formData.append('password', this.password);
+
+                    let hashPart = '';
+
+                    if (this.file) {
+                        formData.append('file', this.file);
+                        formData.append('encrypted_payload', this.file.name);
+                    } else {
+                        if (!this.secret.trim()) return;
+                        
+                        // TEXT MODE: Zero-Knowledge Client-side Encryption.
+                        // 1. Generate a random 'master' key for this specific whisp.
+                        const key = await window.WhispCrypto.generateKey();
+                        
+                        // 2. Encrypt the secret using PBKDF2 derived key and AES-GCM.
+                        const { cipherText, iv, salt } = await window.WhispCrypto.encryptPayload(this.secret, key);
+                        
+                        // 3. Prepare the JSON payload to be stored on the server.
+                        const payloadObj = { cipherText, iv, salt };
+                        formData.append('encrypted_payload', JSON.stringify(payloadObj));
+                        
+                        // 4. Append the key to the URL fragment (hash) so the server never sees it.
+                        hashPart = ':' + key;
+                    }
+
+                    const res = await fetch('/api/whisps', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (!res.ok) {
+                        const err = await res.json();
+                        throw new Error(err.detail || 'Upload failed');
+                    }
+
+                    const data = await res.json();
+                    
+                    // Generate the final shareable link.
+                    this.resultLink = `${window.location.origin}/reveal#${data.id}${hashPart}`;
+                    this.result = true;
+                    this.$dispatch('notify', { message: 'Whisp created!', type: 'success' });
+
+                } catch (e) {
+                    this.$dispatch('notify', { message: e.message, type: 'error' });
+                } finally {
+                    this.isSubmitting = false;
+                }
+            },
+
+
+            /**
+             * Copy the generated link to the clipboard.
+             */
+            copyLink(e) {
+                navigator.clipboard.writeText(this.resultLink);
+                this.$dispatch('notify', { message: 'Link copied!', type: 'success' });
+                
+                // Visual feedback on button
+                const btn = e.currentTarget;
+                const original = btn.innerText;
+                btn.innerText = '✅';
+                setTimeout(() => btn.innerText = original, 2000);
+            },
+
+            /**
+             * Reset the component state for a new whisp.
+             */
+            reset() {
+                this.secret = '';
+                this.file = null;
+                this.password = '';
+                this.result = false;
+                this.resultLink = '';
+            }
+        }
+    }
+</script>
+{% endblock %}

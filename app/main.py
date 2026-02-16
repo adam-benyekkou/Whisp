@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File, Form, BackgroundTasks, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.templating import Jinja2Templates
+from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
@@ -42,27 +43,64 @@ os.makedirs(STORAGE_DIR, exist_ok=True)
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
+templates = Jinja2Templates(directory="app/templates")
 
 async def cleanup_expired_whisps(db: AsyncSession):
-    """Background task to clean up expired whisps"""
+    """
+    Background task to clean up expired whisps from the database.
+    
+    Args:
+        db (AsyncSession): The database session.
+    """
     await db.execute(delete(Whisp).where(Whisp.expires_at < datetime.utcnow()))
     await db.commit()
 
 @app.on_event("startup")
 async def startup():
+    """
+    Startup event handler to initialize the database tables.
+    """
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
 @app.get("/")
-async def read_index():
-    return FileResponse("app/static/index.html")
+async def read_index(request: Request):
+    """
+    Serve the main creation page.
+    
+    Args:
+        request (Request): The incoming request.
+        
+    Returns:
+        TemplateResponse: The rendered create.html template.
+    """
+    return templates.TemplateResponse("create.html", {"request": request})
+
+@app.get("/reveal")
+async def read_reveal(request: Request):
+    """
+    Serve the secret reveal page.
+    
+    Args:
+        request (Request): The incoming request.
+        
+    Returns:
+        TemplateResponse: The rendered reveal.html template.
+    """
+    return templates.TemplateResponse("reveal.html", {"request": request})
 
 def delete_file(path: str):
+    """
+    Helper function to delete a file from the filesystem.
+    
+    Args:
+        path (str): Absolute path to the file.
+    """
     if os.path.exists(path):
         os.remove(path)
 
 @app.post("/api/whisps", response_model=schemas.WhispRead)
-@limiter.limit("5/minute")
+@limiter.limit("50/minute")
 async def create_whisp(
     request: Request,
     background_tasks: BackgroundTasks,
@@ -72,6 +110,25 @@ async def create_whisp(
     file: Optional[UploadFile] = File(None),
     db: AsyncSession = Depends(get_db)
 ):
+    """
+    Endpoint to create a new whisp (text or file).
+    
+    The payload is expected to be encrypted client-side for text whisps.
+    For files, the server performs encryption at rest.
+    
+    Args:
+        request (Request): Incoming request (for rate limiting).
+        background_tasks (BackgroundTasks): Task manager for cleanup.
+        encrypted_payload (str): Encrypted secret or file metadata.
+        ttl_minutes (int): Minutes until auto-destruction.
+        password (Optional[str]): Optional server-side passphrase.
+        file (Optional[UploadFile]): Optional file attachment.
+        db (AsyncSession): Database session.
+        
+    Returns:
+        Whisp: The created whisp metadata.
+    """
+
     # Validate TTL
     if ttl_minutes < 1 or ttl_minutes > 10080:  # Max 1 week
         raise HTTPException(status_code=400, detail="TTL must be between 1 minute and 1 week")
@@ -166,13 +223,27 @@ async def create_whisp(
     return new_whisp
 
 @app.get("/api/whisps/{whisp_id}")
-@limiter.limit("10/minute")
+@limiter.limit("100/minute")
 async def get_whisp(
     request: Request,
     whisp_id: str,
     password: Optional[str] = None,
     db: AsyncSession = Depends(get_db)
 ):
+    """
+    Retrieve metadata for a specific whisp.
+    
+    Implements one-time access: text whisps are deleted immediately upon retrieval.
+    
+    Args:
+        request (Request): Incoming request.
+        whisp_id (str): UUID of the whisp.
+        password (Optional[str]): Server-side passphrase if required.
+        db (AsyncSession): Database session.
+        
+    Returns:
+        WhispRead: Whisp metadata.
+    """
     result = await db.execute(select(Whisp).where(Whisp.id == whisp_id))
     whisp = result.scalars().first()
     
@@ -197,7 +268,7 @@ async def get_whisp(
     return data
 
 @app.get("/api/whisps/{whisp_id}/file")
-@limiter.limit("10/minute")
+@limiter.limit("100/minute")
 async def get_whisp_file(
     request: Request,
     whisp_id: str,
@@ -205,6 +276,22 @@ async def get_whisp_file(
     password: Optional[str] = None,
     db: AsyncSession = Depends(get_db)
 ):
+    """
+    Download and decrypt a file artifact.
+    
+    Implements one-time access: the whisp and file are deleted after download.
+    
+    Args:
+        request (Request): Incoming request.
+        whisp_id (str): UUID of the whisp.
+        background_tasks (BackgroundTasks): Task manager for cleanup.
+        password (Optional[str]): Server-side passphrase if required.
+        db (AsyncSession): Database session.
+        
+    Returns:
+        Response: Decrypted file content.
+    """
+
     result = await db.execute(select(Whisp).where(Whisp.id == whisp_id))
     whisp = result.scalars().first()
     

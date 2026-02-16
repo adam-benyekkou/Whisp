@@ -1,6 +1,6 @@
 # <img src="app/static/whisp-logo.svg" width="48" height="48" style="vertical-align: middle;"> Whisp
 
-Whisp is a lightweight, self-hosted secret sharing application. It allows you to share encrypted strings or files with a temporary, unique link that expires after a set duration or after being accessed once.
+Whisp is a lightweight, self-hosted secret sharing application built with the **PETAL Stack** (Python, Alpine.js, Tailwind CSS, Linux). It allows you to share encrypted strings or files with a temporary, unique link that expires after a set duration or after being accessed once.
 
 ## Features
 - **Zero-Knowledge Encryption**: Secrets are encrypted in the browser using the Web Crypto API (AES-GCM 256-bit). The server never sees the plaintext or the decryption key.
@@ -19,7 +19,7 @@ Whisp is a lightweight, self-hosted secret sharing application. It allows you to
 - **Encryption**: 
   - Client-side: Web Crypto API (AES-GCM)
   - Server-side: Cryptography (Fernet/AES)
-- **Frontend**: Vanilla JS + Tailwind CSS (Glassmorphism UI)
+- **Frontend**: PETAL Stack (Python + Alpine.js + Tailwind CSS + Linux)
 - **Infrastructure**: Docker / Docker Compose
 
 ## Quick Start
@@ -105,19 +105,15 @@ npx playwright install chromium
 #### Run Tests
 ```bash
 # Make sure the app is running first
-docker-compose up -d
+docker-compose up -d --build
 
-# Run tests
-npm test
+# Run backend unit tests inside the container
+docker exec whisp-whisp-1 python -m pytest tests/test_backend.py
 
-# Run with UI
-npm run test:ui
-
-# Run in headed mode (see browser)
-npm run test:headed
-
-# Debug mode
-npm run test:debug
+# Run E2E tests (requires local node/playwright setup)
+npm install
+npx playwright install chromium
+npx playwright test
 ```
 
 #### Test Coverage
