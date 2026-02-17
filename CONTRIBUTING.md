@@ -13,5 +13,5 @@ safety check
 ## Docker Build
 To test the production build:
 ```bash
-docker build -t whisp:latest .
+docker build -t whisp-secret:latest .
 ```

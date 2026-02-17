@@ -36,7 +36,7 @@ To use the pre-built image from GitHub Container Registry:
 # docker-compose.yml
 services:
   whisp:
-    image: ghcr.io/adam-benyekkou/whisp:latest
+    image: ghcr.io/adam-benyekkou/whisp-secret:latest
     ports:
       - "8000:8000"
     tmpfs:
