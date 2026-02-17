@@ -8,8 +8,8 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  # temporary test name to check for name-locking
-  IMAGE_NAME: ${{ github.repository_owner }}/whisp-app
+  # force image name to be 'whisp' regardless of repo name
+  IMAGE_NAME: ${{ github.repository_owner }}/whisp
 
 jobs:
   security-audit:
