@@ -2,6 +2,8 @@
 
 Whisp is a lightweight, self-hosted secret sharing application built with the **PETAL Stack** (Python, Alpine.js, Tailwind CSS, Linux). It allows you to share encrypted strings or files with a temporary, unique link that expires after a set duration or after being accessed once.
 
+### [🚀 Live Demo](https://whisp.cavydev.com/)
+
 ## Features
 - **Zero-Knowledge Encryption**: Secrets are encrypted in the browser using the Web Crypto API (AES-GCM 256-bit). The server never sees the plaintext or the decryption key.
 - **RAM-Only File Storage**: Files are stored in a temporary `tmpfs` volume in RAM, never touching the physical disk.
@@ -30,8 +32,8 @@ mkdir -p data && chown -R 1000:1000 data
 docker-compose up -d
 ```
 
-### Production Deployment (Traefik + Docker Compose)
-To use the pre-built image from GitHub Container Registry with a reverse proxy like Traefik:
+### Production Deployment (Pre-built Image)
+To use the pre-built image from GitHub Container Registry:
 
 ```yaml
 # docker-compose.yml
@@ -40,8 +42,8 @@ services:
     image: ghcr.io/adam-benyekkou/whisp-secret:latest
     container_name: whisp
     restart: unless-stopped
-    networks:
-      - proxy-network
+    ports:
+      - "8000:8000"
     environment:
       - DATABASE_URL=sqlite+aiosqlite:////app/data/whisp.db
       - STORAGE_DIR=/app/data/storage
@@ -51,20 +53,9 @@ services:
     tmpfs:
       # Secure ephemeral storage in RAM for encrypted file fragments
       - /app/data/storage:size=100M,mode=1777
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=proxy-network"
-      - "traefik.http.routers.whisp.rule=Host(`whisp.yourdomain.com`)"
-      - "traefik.http.routers.whisp.entrypoints=websecure"
-      - "traefik.http.routers.whisp.tls.certresolver=myresolver"
-      - "traefik.http.services.whisp.loadbalancer.server.port=8000"
-
-networks:
-  proxy-network:
-    external: true
 ```
 
-#### Setup Persistence
+#### Setup & Launch
 ```bash
 mkdir -p data && chown -R 1000:1000 data
 docker compose up -d
