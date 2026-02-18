@@ -2,7 +2,7 @@
 
 Whisp is a lightweight, self-hosted secret sharing application built with the **PETAL Stack** (Python, Alpine.js, Tailwind CSS, Linux). It allows you to share encrypted strings or files with a temporary, unique link that expires after a set duration or after being accessed once.
 
-### [🚀 Live Demo](https://whisp.cavydev.com/)
+### [Live Demo](https://whisp.cavydev.com/)
 
 ## Features
 - **Zero-Knowledge Encryption**: Secrets are encrypted in the browser using the Web Crypto API (AES-GCM 256-bit). The server never sees the plaintext or the decryption key.
