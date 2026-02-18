@@ -32,11 +32,15 @@ MAX_FILE_SIZE = int(os.getenv("MAX_FILE_SIZE", str(10 * 1024 * 1024)))
 os.makedirs(STORAGE_DIR, exist_ok=True)
 
 app = FastAPI(
-    title="Whisp API",
-    root_path=os.getenv("ROOT_PATH", "")
+    title="Whisp API"
 )
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Application Secret Key
+SECRET_KEY = os.getenv("SECRET_KEY", "whisp-insecure-default-key-change-me")
+if SECRET_KEY == "whisp-insecure-default-key-change-me" and not os.getenv("DEBUG"):
+    print("WARNING: Using default SECRET_KEY in production! Please set SECRET_KEY env var.")
 
 # CORS configuration
 app.add_middleware(
