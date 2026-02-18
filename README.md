@@ -45,7 +45,7 @@ sequenceDiagram
 
 ---
 
-## 🚀 Deployment
+## 🚢 Deployment
 
 Whisp is distributed as a lightweight Docker container.
 
