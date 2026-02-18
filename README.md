@@ -1,4 +1,4 @@
-# <img src="app/static/whisp-logo.svg" width="48" height="48" style="vertical-align: middle;"> Whisp - Ephemeral Secret Sharing
+# <img src="app/static/whisp-logo.svg" width="48" height="48" style="vertical-align: middle;"> Whisp
 
 <div align="center">
 
@@ -65,7 +65,7 @@ services:
     volumes:
       - ./data:/app/data
     tmpfs:
-      # 🔒 CRITICAL: Stores secrets in RAM only
+      # CRITICAL: Stores secrets in RAM only
       - /app/data/storage:size=100M,mode=1777
 ```
 
