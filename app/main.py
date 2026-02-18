@@ -11,6 +11,7 @@ import os
 import uuid
 import aiofiles
 import json
+from pathlib import Path
 from cryptography.fernet import Fernet
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -24,7 +25,16 @@ from app.core.security import get_password_hash, verify_password
 # Rate limiter setup
 limiter = Limiter(key_func=get_remote_address)
 
-app = FastAPI(title="Whisp API")
+# Path configuration
+BASE_DIR = Path(__file__).resolve().parent
+STORAGE_DIR = os.getenv("STORAGE_DIR", str(BASE_DIR / "storage" / "files"))
+MAX_FILE_SIZE = int(os.getenv("MAX_FILE_SIZE", str(10 * 1024 * 1024)))
+os.makedirs(STORAGE_DIR, exist_ok=True)
+
+app = FastAPI(
+    title="Whisp API",
+    root_path=os.getenv("ROOT_PATH", "")
+)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -37,13 +47,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-STORAGE_DIR = "app/storage/files"
-MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
-os.makedirs(STORAGE_DIR, exist_ok=True)
-
-# Mount static files
-app.mount("/static", StaticFiles(directory="app/static"), name="static")
-templates = Jinja2Templates(directory="app/templates")
+# Mount static files and templates with absolute paths
+app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
+templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 async def cleanup_expired_whisps(db: AsyncSession):
     """
@@ -60,8 +66,14 @@ async def startup():
     """
     Startup event handler to initialize the database tables.
     """
+    # Create tables
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for Docker/Kubernetes"""
+    return {"status": "ok"}
 
 @app.get("/")
 async def read_index(request: Request):
