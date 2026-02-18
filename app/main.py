@@ -51,6 +51,11 @@ app.add_middleware(
 STATIC_DIR = BASE_DIR / "static"
 TEMPLATES_DIR = BASE_DIR / "templates"
 
+print(f"Startup: BASE_DIR={BASE_DIR}")
+print(f"Startup: STATIC_DIR={STATIC_DIR}")
+print(f"Startup: TEMPLATES_DIR={TEMPLATES_DIR}")
+print(f"Startup: STORAGE_DIR={STORAGE_DIR}")
+
 # Mount static files and templates with absolute paths
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
