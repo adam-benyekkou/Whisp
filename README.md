@@ -87,6 +87,15 @@ docker compose up -d
 
 ---
 
+## 🛠️ Tech Stack
+
+*   **Frontend**: PETAL (Python, Alpine.js, Tailwind CSS)
+*   **Backend**: FastAPI (Async Python 3.11)
+*   **Database**: SQLite (Async via aiosqlite)
+*   **Infrastructure**: Docker, Docker Compose, GitHub Actions
+
+---
+
 ## 🧪 Testing & Quality Assurance
 
 This project maintains rigorous code quality standards using Playwright for End-to-End (E2E) testing.
@@ -102,15 +111,6 @@ npm install
 npx playwright install chromium
 npx playwright test
 ```
-
----
-
-## 🛠️ Tech Stack
-
-*   **Frontend**: PETAL (Python, Alpine.js, Tailwind CSS)
-*   **Backend**: FastAPI (Async Python 3.11)
-*   **Database**: SQLite (Async via aiosqlite)
-*   **Infrastructure**: Docker, Docker Compose, GitHub Actions
 
 ---
 
